@@ -1,0 +1,617 @@
+unit LO_DobleEnlace;
+
+interface
+
+uses SysUtils;
+
+Const 
+  _posicion_nula  = -1;
+  _clave_nula 	= '';
+  _Clave_Inicial = 'A00';
+  _Clave_media = 'M50';
+  _Clave_Final = 'Z99' ;
+
+Type
+	Tipo_Posicion  =  Longint;
+	Tipo_Clave     =  String [3]; //Esta clave valdrá tanto para claves entre A00 y Z99 como para claves entre 100 y 999    
+	Tipo_Cadena    =  String [255];
+
+	Tipo_Registro_Indice =  Record
+	                   	        Clave: Tipo_Clave;
+                           	  Posicion: Tipo_Posicion;
+			   	                    Ant, Sig: Tipo_Posicion;
+                          End;
+
+	Tipo_Archivo_Indice = File of Tipo_Registro_Indice;
+
+	Tipo_Registro_Control = Record
+			                      Ruta, Nombre: Tipo_Cadena ;
+				                    Primero, Ultimo, Primero_E, Ultimo_E: Tipo_Posicion;
+                            UltimaFechaEmitida01, UltimaFechaEmitida02, UltimaFechaEmitida03, UltimaFechaEmitida50: Tipo_Cadena;
+                            UltimoNroComprobante: longint;
+                          End;
+
+	Tipo_Archivo_Control = File of Tipo_Registro_Control;
+
+	Tipo_Indice = Record
+		               C: Tipo_Archivo_Control ;
+                   I: Tipo_Archivo_Indice ;
+		             End;
+
+  
+  function DobleEnlace_Crear(var Indice: Tipo_Indice; sRuta, sNombre: Tipo_Cadena): boolean;                                   //Crea los archivo de Indice, Control y Diccionario si no estan creados.
+  procedure DobleEnlace_Abrir(var Indice: Tipo_Indice); 				                                       //Abre los archivos I,C,D
+  procedure DobleEnlace_Cerrar(var Indice: Tipo_Indice);								       //Cierra los archivos I,C,D
+  function DobleEnlace_Buscar(var Indice: Tipo_Indice; clave: Tipo_Clave; var Posicion: Tipo_Posicion): boolean;	       //Busca de manera serial algun elemento y devuelve true si lo encontró (y devuelve en la variable posicion el valor de la posicion donde lo encontró) Si no lo encuentra devuelve false y ademas la posicion donde deberia estar
+  function DobleEnlace_Buscar_Mejorada ( Var Indice: Tipo_Indice; clave: Tipo_Clave; Var Posicion : Tipo_Posicion): Boolean ;  //Busca de manera mas eficiente haciendo busquedas ascendes o descendentes dependiendo si es mas grande o mas chica que la clave media M50
+  Procedure DobleEnlace_Insertar ( var Indice: Tipo_Indice; pos:Tipo_Posicion; Reg:Tipo_Registro_Indice);                      //Inserta un elemento pasado por parametro a la lista doble en la posicion proporcionada
+  Procedure DobleEnlace_Modificar(var Indice: Tipo_Indice; pos: Tipo_Posicion; RegistroIndice: Tipo_Registro_Indice);	       //Inserta el elemento pasado por parametro suplantando al que esté en la posicion
+  procedure DobleEnlace_Capturar(var Indice: Tipo_Indice; pos: Tipo_Posicion; var RegistroIndice: Tipo_Registro_Indice);       //Toma un elemento de la lista (en la posicion pos) y lo guarda en el RegistroIndice
+  procedure DobleEnlace_Eliminar ( var Indice: Tipo_Indice; pos: Tipo_Posicion);					       //Elimina un elemento de la lista (el de la posicion pos)
+  function DobleEnlace_Primero (var Indice:Tipo_Indice): Tipo_Posicion;							       //Devuelve el primer elemento de la lista
+  function DobleEnlace_Primero_E(var indice:Tipo_Indice): TIpo_Posicion;						       //Devuelve el primer elemento de la lista de elementos eliminados
+  function DobleEnlace_Ultimo (var Indice:Tipo_Indice): Tipo_Posicion;							       //Devuelve el ultimo elemento de la lista
+  function DobleEnlace_Proximo (var Indice:Tipo_Indice; pos: Tipo_Posicion): Tipo_Posicion;				       //Devuelve la posicion del proximo elemento al pasado por parametro
+  function DobleEnlace_Anterior (var Indice:Tipo_Indice; pos: Tipo_Posicion): Tipo_Posicion;				       //Devuelve la posicion del anterior elemento al pasado por parametro
+  function DobleEnlace_Vacio (var Indice:Tipo_Indice): boolean;								       //Devuelve true si la estructura está vacia
+  function DobleEnlace_PosNula(var Indice:Tipo_Indice): integer;							       //Devuelve la posicion nula
+  function DobleEnlace_ClaveNula(var Indice:Tipo_Indice): string;							       //Devuelve la clave nula
+  procedure DobleEnlace_Destruir (var Indice: Tipo_Indice);								       //Elimina los archivos de Indice, Control y Diccionario
+
+  function CompararClaves (Clave1, Clave2: Tipo_Clave): integer; 							       //Recibe por parametro la primer clave y la segunda. Devuelve un 1 si la clave 1 es mayor, un 2 si la 2 es mayor, y un 0 si son iguales
+
+
+implementation
+
+  function DobleEnlace_Crear(var Indice: Tipo_Indice; sRuta, sNombre: Tipo_Cadena): boolean;
+  var
+    sArchivoIndice, sArchivoControl: Tipo_cadena;
+    RegistroControl : Tipo_Registro_Control;
+    bHayError: boolean;
+  begin
+    sArchivoIndice:= sRuta+'\'+sNombre+'.ntx';
+    sArchivoControl:= sRuta+'\'+sNombre+'.con';
+
+    Assign(Indice.I, sArchivoIndice);     //Asignamos archivo de Indice
+    Assign(Indice.C, sArchivoControl);     //Asignamos archivo de Control
+
+
+    {$I-}
+
+    Reset(Indice.I);
+    bHayError:= (IoResult <> 0);
+    if bHayError then Rewrite(Indice.I);
+    Close(Indice.I);
+
+    //Ahora lo mismo para control e iniciarlo
+
+    Reset(Indice.C);
+    bHayError:= IoResult <> 0;
+    if bHayError then
+      begin
+      
+        Rewrite(Indice.C);
+        RegistroControl.Ruta    := sRuta;
+        RegistroControl.Nombre  := sNombre;
+        RegistroControl.Primero:= _Posicion_Nula;
+        RegistroControl.Ultimo:= _Posicion_Nula;
+        RegistroControl.Primero_E:= _Posicion_Nula;
+        RegistroControl.Ultimo_E:= _Posicion_Nula;
+        RegistroControl.UltimaFechaEmitida01:='';
+        RegistroControl.UltimaFechaEmitida02:='';
+        RegistroControl.UltimaFechaEmitida03:='';
+        RegistroControl.UltimaFechaEmitida50:='';
+        RegistroControl.UltimoNroComprobante:=0;
+
+        Seek(Indice.C, 0);
+        write(Indice.C,RegistroControl);
+
+      end;
+    Close(Indice.C);
+
+
+    DobleEnlace_Crear:= bHayError;
+    
+    {$I+}
+    
+  end; //end DobleEnlace_Crear
+
+//----------------------------------------------------------------------------------------------------------------------------------------
+
+  procedure DobleEnlace_Abrir(var Indice: Tipo_Indice);
+  begin
+    Reset(Indice.C);
+    Reset(Indice.I);
+  end; //DobleEnlace_Abrir
+
+//----------------------------------------------------------------------------------------------------------------------------------------
+
+  procedure DobleEnlace_Cerrar(var Indice: Tipo_Indice);
+  begin
+    Close(Indice.C);
+    Close(Indice.I);
+  end; //DobleEnlace_Cerrar
+
+//----------------------------------------------------------------------------------------------------------------------------------------
+
+  function DobleEnlace_Buscar(var Indice: Tipo_Indice; clave: Tipo_Clave; var Posicion: Tipo_Posicion): boolean;
+  var
+    bEncontrado, bCorte: boolean;
+    RegistroControl: Tipo_Registro_Control;
+    RegistroIndice: Tipo_Registro_Indice;
+  begin
+    Seek(Indice.C, 0);
+    Read(Indice.C, RegistroControl);
+
+    if (RegistroControl.Ultimo = _Posicion_Nula) then
+    begin
+      Posicion:= _posicion_nula;
+      DobleEnlace_Buscar:= false;
+    end
+    else
+      begin
+        //Buscamos en forma serial
+        bEncontrado:= false;
+        bCorte:= false;
+        posicion:= RegistroControl.Primero;
+
+        while (bEncontrado = false) and (bCorte = false) and (posicion <> _Posicion_Nula) do
+        begin
+          Seek(Indice.I, posicion);
+          Read(Indice.I, RegistroIndice);
+           
+          If (RegistroIndice.Clave = Clave) then bEncontrado:= True
+          else
+            if (CompararClaves(RegistroIndice.Clave, Clave) = 1) then bCorte:= true
+            else
+              posicion:= RegistroIndice.Sig;
+        end;//While
+        DobleEnlace_Buscar:= bEncontrado;
+      end
+  end; //DobleEnlace_Buscar
+
+
+//-------------------------------------------------------------------------------------------------------------------------------------
+
+
+//-------------------------------------------------------------------------------------------------------------------------------------
+
+ procedure DobleEnlace_Eliminar ( var Indice: Tipo_Indice; pos: Tipo_Posicion);
+ var
+   Reg, RegAnt, RegSig , RegX: Tipo_Registro_Indice ;
+   RegistroControl: Tipo_Registro_Control;
+   posAnt, posSig: Tipo_Posicion ;
+
+ begin
+    //LEER CABECERA (ya que dice donde está primero y ultimo) para reconocer en que posición estamos (pos)
+    Seek ( Indice.C, 0 );
+    Read ( Indice.C, RegistroControl) ;
+
+    Seek ( Indice.I, pos);
+    Read (Indice.I, Reg);
+
+    if (RegistroControl.Primero = pos) and (RegistroControl.Ultimo = pos) then
+    //ELIMINO Y QUEDA LISTA VACIA
+    begin
+      RegistroControl.Primero := _posicion_nula;
+      RegistroControl.Ultimo  := _posicion_nula;
+    end
+    else
+    if (RegistroControl.Primero = pos) then
+      //ELIMINAR AL PRINCIPIO
+      Begin
+        posSig := Reg.Sig ;
+        Seek   ( Indice.I,  posSig);
+        Read   ( Indice.I, RegSig );
+
+        RegSig.Ant := _posicion_nula;
+        RegistroControl.Primero :=  PosSig ;
+
+        Seek (Indice.I, PosSig );
+        Write ( Indice.I, RegSig );
+      end
+      else
+      if  (RegistroControl.Ultimo = pos) then
+      //ELIMINAR AL FINAL
+      begin
+        posAnt := Reg.Ant ;
+        Seek  ( Indice.I, posAnt );
+        Read  ( Indice.I, RegAnt);
+
+        RegAnt.Sig:= _posicion_nula;
+        RegistroControl.ULtimo := PosAnt;
+        Seek (Indice.I, PosAnt );
+        Write ( Indice.I, RegAnt );
+      end
+      else
+      //ELIMINAR AL MEDIO
+      begin
+        posSig:= Reg.Sig ;
+        posAnt:= Reg.Ant ;
+        Seek ( Indice.I, posSig);
+        Read  ( Indice.I, RegSig );
+
+        Seek  (Indice.I, posAnt );
+        Read (Indice.I, RegAnt);
+
+        RegAnt.Sig := posSig ;
+        RegSig.Ant := posAnt ;
+
+        Seek ( Indice.I, posAnt );
+        Write (Indice.I, RegAnt);
+
+        Seek  ( Indice.I, posSig );
+        Write (Indice.I, RegSig );
+      end;
+
+    //COLOCAR ESE NODO EN LA SECUENCIA DE BORRADOS  ---------------------
+
+
+    Reg.Sig:=  RegistroControl.Primero_E;
+    Reg.Ant:= _posicion_nula ;
+
+    if (RegistroControl.Primero_E <> _posicion_nula) Then
+	  begin
+		  Seek ( Indice.I, RegistroControl.Primero_E );
+		  Read ( Indice.I, RegX );
+		  RegX.Ant:= pos ;
+		  Seek ( Indice.I, RegistroControl.Primero_E );
+		  Write( Indice.I, RegX );
+	  end else
+    begin
+        RegistroControl.Ultimo_E:=Pos;
+    end;
+    
+    RegistroControl.Primero_E:=Pos ;
+
+  //GRABO TODO LO QUE TENGO QUE GRABAR
+
+    Seek (Indice.C, 0);
+    Write (Indice.C, RegistroControl);
+
+    Seek ( Indice.I, pos);
+    Write (Indice.I, Reg );
+
+  end;//end DobleEnlace_Eliminar
+
+//-----------------------------------------------------------------------------------------------------------------------------------------------
+
+ Procedure DobleEnlace_Insertar ( var Indice: Tipo_Indice; pos:Tipo_Posicion; Reg:Tipo_Registro_Indice);
+ var
+  RegistroControl:Tipo_Registro_Control;
+	RegSig, RegAnt: Tipo_Registro_Indice;
+	posnueva, posUltimo, posAnt:Tipo_Posicion;
+ begin
+
+  Seek ( Indice.C, 0) ;
+  Read ( Indice.C, RegistroControl);
+
+  posNueva := FileSize ( Indice.I) ;
+
+  if RegistroControl.Primero = _posicion_nula then // 1 - Inserto en estructura vacia
+	
+	begin
+		Reg.Sig := _posicion_nula;
+		Reg.Ant := _posicion_nula;
+		RegistroControl.Primero:= posNueva ;
+		RegistroControl.Ultimo := posNueva ;
+	end
+
+   else
+	if (RegistroControl.Primero = pos) then // 2 - Inserto al principio de la estructura			
+			begin
+				seek (Indice.I, pos);
+				Read (Indice.I, RegSig );
+				Reg.Sig   := pos ;
+				Reg.Ant	  := _posicion_nula;
+				RegSig.Ant:= posNueva;
+
+				RegistroControl.Primero:= posNueva;
+
+				Seek (Indice.I, pos);
+				Write (Indice.I, RegSig);
+			end
+		else
+		    if (pos = _posicion_nula) then // 3 - Inserto al final de la estructura
+				begin
+					posUltimo:= RegistroControl.Ultimo;
+					Seek (Indice.I , posUltimo ) ;
+					Read (Indice.I , RegAnt );
+
+					RegAnt.Sig := posNueva ;
+					Reg.Ant    := posUltimo;
+					Reg.Sig    := _posicion_nula;
+					RegistroControl.Ultimo  := posNueva ;
+
+					Seek (Indice.I, posUltimo);
+					Write (Indice.I, RegAnt);
+
+				end
+
+			else
+				// 4 - Inserta al medio de la estructura
+				begin
+					Seek ( Indice.I, pos);
+					Read (Indice.I, RegSig);
+					posAnt := RegSig.Ant ;
+					Seek  (Indice.I, posAnt);
+					Read  (Indice.I, RegAnt );
+
+					RegSig.Ant:= posNueva;
+					RegAnt.Sig:= posNueva;
+					Reg.Ant	  := posAnt;
+					Reg.Sig   := pos ;
+
+					Seek ( Indice.I, pos);
+					Write (Indice.I, RegSig);
+					Seek  (Indice.I, posAnt);
+					Write (Indice.I, RegAnt) ;
+
+				end;
+
+        //GRABAR TODOS
+  Seek ( Indice.I, posNueva );
+  Write (Indice.I, Reg );
+  Seek  (Indice.C, 0);
+  Write (Indice.C, RegistroControl);
+
+end; //End DobleEnlace_Insertar
+
+//----------------------------------------------------------------------------------------------------------------------------------------
+
+Procedure DobleEnlace_Modificar(var Indice: Tipo_Indice; pos: Tipo_Posicion; RegistroIndice: Tipo_Registro_Indice);
+var
+	Aux: Tipo_Registro_Indice;
+begin
+	Seek(Indice.I, pos);
+	Read(Indice.I, Aux);
+
+	RegistroIndice.Sig:= Aux.Sig;
+	RegistroIndice.Ant:= Aux.Ant;
+  
+	Seek(Indice.I, pos);
+	Write(Indice.I, RegistroIndice);
+end;//End DobleEnlace_Modificar
+
+//-----------------------------------------------------------------------------------------------------------------------------------------
+
+function DobleEnlace_Primero (var Indice:Tipo_Indice): Tipo_Posicion;
+var
+  RegistroControl: Tipo_registro_Control;
+begin
+  Seek(Indice.C,0);
+  Read(Indice.C, RegistroControl);
+
+  DobleEnlace_Primero:= RegistroControl.Primero;
+end; //end DobleEnlace_Primero
+
+//-----------------------------------------------------------------------------------------------------------------------------------------
+
+function DobleEnlace_Primero_E (var Indice:Tipo_Indice): Tipo_Posicion;
+var
+  RegistroControl: Tipo_registro_Control;
+begin
+  Seek(Indice.C,0);
+  Read(Indice.C, RegistroControl);
+
+  DobleEnlace_Primero_E:= RegistroControl.Primero_E;
+end; //end DobleEnlace_Primero_E
+
+//-----------------------------------------------------------------------------------------------------------------------------------------
+
+function DobleEnlace_Ultimo (var Indice:Tipo_Indice): Tipo_Posicion;
+var
+  RegistroControl: Tipo_registro_Control;
+begin
+  Seek(Indice.C,0);
+  Read(Indice.C, RegistroControl);
+
+  DobleEnlace_Ultimo:= RegistroControl.Ultimo;
+end; //end DobleEnlace_Ultimo
+
+//-----------------------------------------------------------------------------------------------------------------------------------------
+
+function DobleEnlace_Ultimo_E (var Indice:Tipo_Indice): Tipo_Posicion;
+var
+  RegistroControl: Tipo_registro_Control;
+begin
+  Seek(Indice.C,0);
+  Read(Indice.C, RegistroControl);
+
+  DobleEnlace_Ultimo_E:= RegistroControl.Ultimo_E;
+end; //end DobleEnlace_UltimoE
+
+//-----------------------------------------------------------------------------------------------------------------------------------------
+
+function DobleEnlace_Proximo (var Indice:Tipo_Indice; pos: Tipo_Posicion): Tipo_Posicion;
+var
+  RegistroIndice: Tipo_registro_Indice;
+begin
+  Seek(Indice.I,pos);
+  Read(Indice.I, RegistroIndice);
+
+  DobleEnlace_Proximo:= RegistroIndice.Sig;
+end; //end DobleEnlace_Proximo
+
+//-----------------------------------------------------------------------------------------------------------------------------------------
+
+function DobleEnlace_Anterior (var Indice:Tipo_Indice; pos: Tipo_Posicion): Tipo_Posicion;
+var
+  RegistroIndice: Tipo_registro_Indice;
+begin
+  Seek(Indice.I,pos);
+  Read(Indice.I, RegistroIndice);
+
+  DobleEnlace_Anterior:= RegistroIndice.Ant;
+end; //end DobleEnlace_Anterior
+
+//-----------------------------------------------------------------------------------------------------------------------------------------
+
+procedure DobleEnlace_Capturar (var Indice: Tipo_Indice; pos: Tipo_posicion; var RegistroIndice: Tipo_Registro_Indice);
+begin
+  Seek(Indice.I, pos);
+  Read(Indice.I, RegistroIndice);
+end;//End DobleEnlace_Capturar
+
+//-----------------------------------------------------------------------------------------------------------------------------------------
+
+function DobleEnlace_Vacio (var Indice:Tipo_Indice): boolean;
+var
+RegistroControl: Tipo_Registro_Control;
+vacio: boolean;
+begin
+  Seek(Indice.C, 0);
+  Read(Indice.C, RegistroControl);
+
+  if RegistroControl.Primero = _posicion_nula then
+    vacio:= true
+    else
+    vacio:= false;
+
+DobleEnlace_Vacio:= vacio;
+
+end;//End DobleEnlace_Vacio
+
+//-----------------------------------------------------------------------------------------------------------------------------------------
+
+function DobleEnlace_PosNula(var Indice:Tipo_Indice): integer;
+begin
+  DobleEnlace_PosNula := _Posicion_Nula;
+end;
+
+function DobleEnlace_ClaveNula(var Indice:Tipo_Indice): string;
+begin
+  DobleEnlace_ClaveNula := _Clave_Nula;
+end;
+
+//-----------------------------------------------------------------------------------------------------------------------------------------
+
+procedure DobleEnlace_Destruir (var Indice: Tipo_Indice);
+begin
+	Close(Indice.C);
+	Close(Indice.I);
+
+	Erase(Indice.C);
+	Erase(Indice.I);
+end; //End DobleEnlace_Destruir 
+
+//-----------------------------------------------------------------------------------------------------------------------------------------
+
+Function DobleEnlace_Buscar_Mejorada ( Var Indice: Tipo_Indice; clave: Tipo_Clave; Var Posicion : Tipo_Posicion): Boolean ;
+  //Busca <clave> en el INDICE. Usa búsqueda binaria. Si no la encuentra, devuelve la posición donde debería estar.
+  var
+    bEncontrado, bCorte: boolean ;
+	  cTipoBusqueda: char;
+    RegistroControl: Tipo_Registro_Control;
+    RegistroIndice: Tipo_Registro_Indice;
+  begin
+    Seek(Indice.C, 0);
+    Read(Indice.C, RegistroControl);
+    
+    if (Clave <= _clave_media) then cTipoBusqueda := 'A' else cTipoBusqueda := 'D';
+
+    if (RegistroControl.Ultimo =  _posicion_nula) then
+    begin
+	    Posicion := _posicion_nula ;
+	    DobleEnlace_Buscar_Mejorada:= false ;
+    end
+    else
+      begin
+        //Busco en forma serial
+        bEncontrado:= false;
+        bCorte:= false ;
+
+	      if cTipoBusqueda = 'A' then
+        begin
+          //Busco desde el principio
+          posicion:= RegistroControl.Primero;
+
+          while (bEncontrado = false) and (bCorte = false) and (posicion <> _posicion_nula) do
+          begin
+            Seek (Indice.I, posicion );
+            Read (Indice.I, RegistroIndice);
+
+            if RegistroIndice.Clave = Clave then bEncontrado := true
+            else
+              if (RegistroIndice.clave > clave) then bCorte:= True else posicion := RegistroIndice.Sig ;
+          end;//while
+
+        end//if tipo a
+        else
+        begin
+	        //Busco desde el final
+          posicion:= RegistroControl.Ultimo ;
+
+	        while (bEncontrado = false) and ( bCorte = false ) and (posicion <> _posicion_nula ) do
+          begin
+		        seek (Indice.I, posicion );
+            Read ( Indice.I, RegistroIndice ) ;
+		        if RegistroIndice.clave = Clave then bEncontrado := true
+		        else
+		          if (RegistroIndice.clave < clave) then bCorte:= True else posicion := RegistroIndice.Ant ;
+          end;//while
+
+          if (bEncontrado = false) then posicion:= RegistroIndice.Sig;	//dado que siempre devuelvo la posicion del inmediato siguiente
+
+	    end//else (tipo d)
+
+    end;//ultimo es distinto a posicionnula
+
+   DobleEnlace_Buscar_Mejorada:=bEncontrado;
+
+ end;//DobleEnlace_Buscar_Mejorada
+
+//-----------------------------------------------------------------------------------------------------------------------------------------
+
+function CompararClaves (Clave1, Clave2: Tipo_Clave): integer; //Recibe por parametro la primer clave y la segunda. Devuelve un 1 si la clave 1 es mayor, un 2 si la 2 es mayor, y un 0 si son iguales
+var
+	nResultado: integer;
+	letra1, letra2: char;
+  nClave1, nClave2: longint;
+
+	numeroMedio1, numeroMedio2: integer;
+	
+	numero1,numero2: integer;
+begin
+	letra1:=Clave1[1];
+	letra2:=Clave2[1];
+
+	if (Clave1 = Clave2) then nResultado:=0
+	else
+	begin
+	  if ((letra1 >= '0') and (letra2<='9')) then    //ESTOY COMPARANDO NUMEROS
+      begin
+        nClave1:=StrToInt(Clave1);
+        nClave2:=StrToInt(Clave2);
+
+        if (nClave1> nClave2) then nResultado:= 1 else nResultado:= 2;
+        
+      end
+      else
+      if (letra1>letra2) then nResultado:= 1
+	    else
+	    if (letra2>letra1) then nResultado:= 2 
+      else
+	      if (letra1=letra2) then
+	      begin
+	    	//hay que ver que numero es mas grande pero antes hay que ver que el numero central no sea 0
+	    	numeroMedio1:= StrToInt( Clave1[2] );
+	    	numeroMedio2:= strToInt( Clave2[2] );
+		
+	    	if (numeroMedio1 = 0) then numero1:= StrToInt(Clave1[3]) else numero1:=StrToInt(Clave1[2]+Clave1[3]);
+		
+	    	if (numeroMedio2 = 0) then numero2:= StrToInt(Clave2[3]) else numero2:=StrToInt(Clave2[2]+Clave2[3]);
+		
+    		if (numero1 > numero2) then nResultado:= 1 else nResultado:= 2
+		
+	    end;
+	end;
+	
+	CompararClaves:= nResultado;
+
+end; //End_CompararClaves
+
+//-----------------------------------------------------------------------------------------------------------------------------------------
+
+
+end.

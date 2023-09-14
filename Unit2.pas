@@ -1,0 +1,751 @@
+unit Unit2;
+
+interface
+
+uses
+  Windows, Messages, SysUtils, Variants, Classes, Graphics, Controls, Forms,
+  Dialogs, StdCtrls, jpeg, ExtCtrls, Buttons, Lo_DobleEnlace, Lo_Datos_Clientes,
+  Grids, ComCtrls, LO_Datos_Asientos, LO_Pila, LO_Datos_Detalles;
+
+type
+  TForm_Clientes = class(TForm)
+    Image1: TImage;
+    Label1: TLabel;
+    Button1: TButton;
+    GroupBox1: TGroupBox;
+    BitBtn1: TBitBtn;
+    Edit1: TEdit;
+    Label2: TLabel;
+    Edit2: TEdit;
+    Label3: TLabel;
+    Edit3: TEdit;
+    Label4: TLabel;
+    BitBtn2: TBitBtn;
+    BitBtn3: TBitBtn;
+    StringGrid1: TStringGrid;
+    Label5: TLabel;
+    ComboBox1: TComboBox;
+    DateTimePicker1: TDateTimePicker;
+    DateTimePicker2: TDateTimePicker;
+    Label6: TLabel;
+    Label7: TLabel;
+    Label8: TLabel;
+    Edit4: TEdit;
+    procedure Button1Click(Sender: TObject);
+    procedure BitBtn1Click(Sender: TObject);
+    procedure FormCreate(Sender: TObject);
+    procedure Edit1Change(Sender: TObject);
+
+    procedure BitBtn3Click(Sender: TObject);
+    procedure BitBtn2Click(Sender: TObject);
+    procedure Button3Click(Sender: TObject);
+    procedure ComboBox1Change(Sender: TObject);
+    procedure DateTimePicker1Change(Sender: TObject);
+    procedure DateTimePicker2Change(Sender: TObject);
+    procedure Edit4Change(Sender: TObject);
+  private
+    { Private declarations }
+  public
+    { Public declarations }
+  end;
+
+var
+  Form_Clientes: TForm_Clientes;
+
+implementation
+
+uses Unit1, Unit6;
+
+{$R *.dfm}
+
+procedure LimpiarTablaClientes;
+var
+  i: longint;
+begin
+  for i:= 1 to Form_Clientes.StringGrid1.RowCount  do
+  begin
+    Form_clientes.StringGrid1.Rows[i].Clear;
+  end;
+
+end;
+
+procedure LimpiarAbmClientes;
+begin
+  Form_Clientes.Edit1.Clear;
+  Form_Clientes.Edit2.Clear;
+  Form_Clientes.Edit3.Clear;
+end;
+
+procedure ListarClientes;
+var
+  RegistroDatos: LO_Datos_Clientes.Tipo_Registro_Datos;
+  RegistroIndice: LO_DobleEnlace.Tipo_Registro_Indice;
+
+  posicion, posDatos: LO_DobleEnlace.Tipo_Posicion;
+
+  i: longint;
+
+begin
+  LimpiarTablaClientes;
+  Form_Clientes.StringGrid1.Cells[0,0]:= 'Cód.';
+  Form_Clientes.StringGrid1.Cells[1,0]:= 'Nombre';
+  Form_Clientes.StringGrid1.Cells[2,0]:= 'DNI';
+  Form_Clientes.StringGrid1.RowCount:= 1;
+  
+  posicion:= LO_DobleEnlace.DobleEnlace_Primero(Unit1.ME_Clientes.Indice);
+
+  i:= 1;
+
+  while (posicion <> LO_DobleEnlace.DobleEnlace_PosNula(Unit1.ME_Clientes.Indice)) do
+  begin
+    Form_Clientes.StringGrid1.RowCount:= Form_Clientes.StringGrid1.RowCount + 1;
+
+    Lo_DobleEnlace.DobleEnlace_Capturar(Unit1.ME_Clientes.Indice, posicion, RegistroIndice);
+    posDatos:= registroIndice.Posicion;
+    LO_Datos_Clientes.Datos_Capturar(Unit1.ME_clientes.Datos, posDatos, RegistroDatos);
+
+    Form_Clientes.StringGrid1.Cells[0, i]:= RegistroDatos.Clave;
+    Form_clientes.StringGrid1.Cells[1, i]:= RegistroDatos.Nombre;
+    Form_clientes.StringGrid1.Cells[2, i]:= RegistroDatos.Dni;
+
+    i:=i+1;
+    posicion:= RegistroIndice.Sig;
+  end;//while
+
+
+end;  //End ListarClientes
+
+
+
+function VerificarClave(Clave: String): boolean;
+var
+  bResultado: boolean;
+begin
+  bResultado:= false;
+
+  if ( Clave[1] >= 'A' ) and (Clave[1] <= 'Z') then
+  begin
+    if ( Ord(Clave[2]) >= 48) and ( Ord(Clave[2]) <= 57) then
+      if ( Ord(Clave[3]) >= 48) and ( Ord(Clave[3]) <= 57) then bResultado:=true
+  end;
+  VerificarClave:= bResultado;
+end;    //End VerificarClave
+
+function VerificarFormatoDni(Dni: String): boolean;
+var
+  bResultado, bCorte: boolean;
+  pos: integer;
+begin
+  bResultado:= true;
+  bCorte:= false;
+  pos:=1;
+  
+  if (Length(dni) <> 13) then bResultado:=false
+  else
+  begin
+    while (bCorte = false) and (pos < Length(dni)+1) do
+    begin
+    if ((pos = 1) or (pos = 2) or ((pos >=4) and (pos <=11)) or (pos = 13)) then
+    begin
+      if ((DNI[pos] < '0') or (DNI[pos] > '9')) then bResultado:=false;
+    end;
+
+    if (pos = 3) or (pos = 12) then
+    begin
+      if DNI[pos] <> '-' then bResultado:= false;
+    end;
+    pos:=pos+1
+    end;
+  end;
+
+  VerificarFormatoDNI:= bResultado;
+end;
+
+function CorregirClave(Clave: string): string;
+var
+  nuevaClave: string;
+begin
+  nuevaClave:=clave;
+
+  if (Clave[1]>= 'a') and (Clave[1]<='z') then
+  begin
+    Clave[1]:= chr ( Ord(Clave[1]) - 32 ); //no se usa Uppercase() por incompatibilidad entre string y char
+    nuevaClave:= clave;
+  end;
+
+  CorregirClave:= nuevaClave;
+end;
+
+function CapturarDatos(Clave: string): boolean;
+var
+  Pos: LO_DobleEnlace.Tipo_Posicion;
+  RegistroIndice: LO_DobleEnlace.Tipo_Registro_Indice;
+  posDatos: LO_Datos_Clientes.Tipo_Posicion;
+  RegistroDatos: LO_Datos_clientes.Tipo_Registro_Datos;
+  bResultado: boolean;
+begin
+  bResultado:= false;
+  if (Lo_DobleEnlace.DobleEnlace_Buscar(Unit1.Me_Clientes.Indice, clave, pos)=true) then
+  begin
+    LO_DobleEnlace.DobleEnlace_Capturar(Unit1.Me_Clientes.Indice,pos, RegistroIndice);
+    posDatos:= RegistroIndice.Posicion;
+
+    LO_Datos_Clientes.Datos_Capturar(Unit1.ME_Clientes.Datos, posDatos, RegistroDatos);
+
+    Form_Clientes.Edit2.Text:= RegistroDatos.Nombre;
+    Form_Clientes.Edit3.Text:= RegistroDatos.Dni;
+
+    Form_Clientes.BitBtn1.Enabled:=false;
+    Form_Clientes.BitBtn2.Enabled:=true;
+    Form_Clientes.BitBtn3.Enabled:=true;
+
+    bResultado:=true;
+  end;
+  
+  CapturarDatos:=bResultado;
+end;
+
+procedure ActualizarClientesEnFacturacion;
+var
+  pos: integer;
+  clave: String;
+  RegistroIndiceCliente: LO_DobleEnlace.Tipo_Registro_indice;
+begin
+  //mostrar clientes en el combobox
+
+  Form_Facturacion.ComboBox1.Items.Clear;
+
+  pos:= LO_DobleEnlace.DobleEnlace_Primero(Unit1.ME_Clientes.Indice);
+
+  while (pos <> LO_DobleEnlace.DobleEnlace_PosNula(Unit1.ME_Clientes.Indice)) do
+  begin
+    LO_DobleEnlace.DobleEnlace_Capturar(Unit1.ME_Clientes.Indice, pos, RegistroIndiceCliente);
+    clave:= RegistroIndiceCliente.Clave;
+    Form_Facturacion.ComboBox1.AddItem(clave, Form_Facturacion.ComboBox1);
+
+    pos:= RegistroIndiceCliente.Sig;
+  end;
+end;
+
+
+procedure TForm_Clientes.Button1Click(Sender: TObject);
+begin
+  Form_Clientes.Close;
+  Form_MenuPrincipal.Show;
+end;
+
+procedure TForm_Clientes.BitBtn1Click(Sender: TObject);
+var
+  RegistroDatos: LO_Datos_Clientes.Tipo_Registro_Datos;
+  RegistroIndice: LO_DobleEnlace.Tipo_Registro_Indice;
+  clave: LO_Datos_Clientes.Tipo_Clave;
+  nombre: LO_Datos_Clientes.Tipo_Nombre;
+  dni: LO_Datos_Clientes.Tipo_Dni;
+  pos: LO_DobleEnlace.Tipo_Posicion;
+  posDatos: integer;
+begin
+  clave:= Form_Clientes.Edit1.Text;
+  clave:= CorregirClave(clave);
+  nombre:= Form_Clientes.Edit2.Text;
+  dni:= Form_Clientes.Edit3.Text;
+
+  if (nombre='') or (dni='') then showmessage('Por favor, ingrese todos los campos')
+  else
+  begin
+   RegistroDatos.Clave:=clave;
+   RegistroDatos.Nombre:=nombre;
+   RegistroDatos.Dni:=dni;
+
+   posDatos:= FileSize(Unit1.ME_Clientes.Datos.D);
+   RegistroIndice.Clave:=clave;
+   RegistroIndice.Posicion:= posDatos;
+
+   if VerificarFormatoDni(Dni) = false then Showmessage('Error. El formato del DNI debe ser 99-99999999-9')
+   else
+   begin
+   if (LO_DobleEnlace.DobleEnlace_Buscar(Unit1.ME_Clientes.Indice, clave, pos) = false ) then
+   begin
+
+     LO_Datos_Clientes.Datos_Insertar(Unit1.Me_Clientes.Datos, RegistroDatos);
+     LO_DobleEnlace.DobleEnlace_Insertar(Unit1.ME_Clientes.Indice, pos, RegistroIndice );
+
+     Showmessage('Se ha insertado el cliente.');
+
+     LimpiarAbmClientes;
+     ListarClientes;
+     ActualizarClientesEnFacturacion;
+   end else showmessage('opaaa no se ha insertado por algun error xd');
+   //SINO NO PODRA INSERTARLO PORQUE EL BOTON INSERTAR SE DESHABILITARÄ
+   end
+
+   end
+
+end;
+
+procedure TForm_Clientes.FormCreate(Sender: TObject);
+begin
+  ListarClientes;
+  Form_Clientes.ComboBox1.ItemIndex:=0;
+  Form_Clientes.DateTimePicker1.Date:= now;
+  Form_Clientes.DateTimePicker2.Date:= now;
+  edit1.MaxLength:=3;
+  edit2.MaxLength:=30;
+  edit3.MaxLength:=13;
+  Edit4.MaxLength:=4;
+
+end;
+
+procedure TForm_Clientes.Edit1Change(Sender: TObject);
+var
+  Clave: string;
+begin
+  clave:= edit1.Text;
+
+  if Length(Clave) = 1 then
+  begin
+    if (Clave <'A') or (Clave >'Z') then
+    begin
+      if (Clave<'a') or (Clave>'z') then Form_Clientes.Edit1.Clear;
+    end
+  end;
+
+  if (Length(Clave) <> 3) then
+  begin
+    Form_Clientes.BitBtn1.Enabled:=false;
+    Form_Clientes.BitBtn2.Enabled:=false;
+    Form_Clientes.BitBtn3.Enabled:=False;
+
+    Form_Clientes.Edit2.Clear;
+    Form_Clientes.Edit3.Clear;
+  end;
+
+  if (Length(Clave) = 3) then
+  begin
+    clave:= CorregirClave(Clave);
+
+    if (VerificarClave(Clave) = true) then
+    begin
+
+      if CapturarDatos(Clave) = false then Form_Clientes.BitBtn1.Enabled:=true;
+
+    end else Showmessage('Se ha ingresado una clave incorrecta. (El formato debe ser "A23") ');
+  end;
+  
+end;
+
+
+procedure TForm_Clientes.BitBtn3Click(Sender: TObject);
+var
+  RegistroDatos: LO_Datos_Clientes.Tipo_Registro_Datos;
+  RegistroIndice: LO_DobleEnlace.Tipo_Registro_Indice;
+  clave: LO_Datos_Clientes.Tipo_Clave;
+  nombre: LO_Datos_Clientes.Tipo_Nombre;
+  dni: LO_Datos_Clientes.Tipo_Dni;
+  pos: LO_DobleEnlace.Tipo_Posicion;
+  posDatos: integer;
+begin
+  clave:= Form_Clientes.Edit1.Text;
+  clave:= CorregirClave(clave);
+  nombre:= Form_Clientes.Edit2.Text;
+  dni:= Form_Clientes.Edit3.Text;
+
+  if (nombre='') or (dni='') then showmessage('Por favor, ingrese todos los campos')
+  else
+  begin
+   RegistroDatos.Clave:=clave;
+   RegistroDatos.Nombre:=nombre;
+   RegistroDatos.Dni:=dni;
+
+   if VerificarFormatoDni(Dni) = false then Showmessage('Error. El formato del DNI debe ser 99-99999999-9')
+   else
+   begin
+    if (LO_DobleEnlace.DobleEnlace_Buscar(Unit1.ME_Clientes.Indice, clave, pos) = true ) then
+   begin
+     LO_DobleEnlace.DobleEnlace_Capturar(Unit1.ME_Clientes.Indice, pos, RegistroIndice);
+
+     posDatos:= RegistroIndice.Posicion;
+
+     LO_Datos_Clientes.Datos_Modificar(Unit1.Me_Clientes.Datos, posDatos, RegistroDatos);
+
+     Showmessage('Se ha modificado el cliente.');
+
+     LimpiarAbmClientes;
+     ListarClientes;
+   end
+   end
+
+  end
+
+end;
+
+function AutorizarEliminacionCliente(clave: string): boolean;
+var
+  bResultado: boolean;
+  suma: real;
+  RegistroPila: LO_DobleEnlace.Tipo_Registro_Indice;
+  RegistroDatosAsiento: LO_Datos_Asientos.Tipo_Registro_Datos;
+  PilaAux: LO_DobleEnlace.Tipo_Indice;
+  posDatos: longint;
+begin
+  Pila_Crear(PilaAux, unit1.sRuta, 'pilaTemp');
+  Pila_Abrir(PilaAux);
+  bResultado:= true;
+  suma:= 0;
+
+  while (Pila_Vacia(Unit1.ME_CuentasCorrientes.Pila) = false) do
+  begin
+    Pila_Tope(Unit1.ME_CuentasCorrientes.Pila, RegistroPila);
+
+    if (RegistroPila.Clave = clave) then
+    begin
+        posDatos:= REgistroPila.Posicion;
+        LO_Datos_Asientos.Datos_Capturar(Unit1.ME_CuentasCorrientes.Datos, posDatos, RegistroDatosAsiento);
+
+        suma:= suma+RegistroDatosAsiento.importe;
+
+
+    end;
+
+
+    Pila_Desapilar(Unit1.ME_CuentasCorrientes.Pila);
+    Pila_Apilar(pilaAux, RegistroPila);
+
+  end;//while
+
+
+  //Volvemos a dejar pila CC como estaba
+  while (Pila_Vacia(pilaAux) = false) do
+  begin
+    Pila_Tope(pilaAux, RegistroPila);
+    Pila_Apilar(Unit1.ME_CuentasCorrientes.Pila, RegistroPila);
+    Pila_Desapilar(pilaAux);
+  end;
+
+  if Suma <> 0 then bResultado:= false;
+
+
+  Pila_Destruir(pilaAux);
+  AutorizarEliminacionCliente:= bResultado;
+end;
+
+procedure TForm_Clientes.BitBtn2Click(Sender: TObject);
+var
+  RegistroIndice: LO_DobleEnlace.Tipo_Registro_Indice;
+  clave: LO_Datos_Clientes.Tipo_Clave;
+  pos: LO_DobleEnlace.Tipo_Posicion;
+  posDatos: integer;
+begin
+  clave:= Form_Clientes.Edit1.Text;
+  clave:=CorregirClave(clave);
+
+  if (LO_DobleEnlace.DobleEnlace_Buscar(Unit1.ME_Clientes.Indice, clave, pos) = true ) then
+  begin
+    LO_DobleEnlace.DobleEnlace_Capturar(Unit1.ME_Clientes.Indice, pos, RegistroIndice);
+    posDatos:= RegistroIndice.Posicion;
+
+    if Dialogs.MessageDlg('¿Está seguro que desea eliminar este cliente?', mtConfirmation,[mbYes,mbNo], 0) = mrYes then
+    begin
+
+
+      if (AutorizarEliminacionCliente(clave) = true) then
+      begin
+        LO_Datos_Clientes.Datos_Eliminar(Unit1.Me_Clientes.Datos, posDatos);
+        LO_DobleEnlace.DobleEnlace_Eliminar(Unit1.Me_Clientes.Indice, pos);
+
+        Showmessage('Se ha eliminado un cliente.');
+
+        ActualizarClientesEnFacturacion;
+        LimpiarAbmClientes;
+        ListarClientes;
+      end
+      else
+        showmessage('No se puede eliminar el cliente. Tiene saldo deudor.')
+
+
+    end;
+
+
+  end;
+ 
+
+end;
+
+
+
+procedure TForm_Clientes.Button3Click(Sender: TObject);
+var
+  reg: LO_DobleEnlace.Tipo_Registro_indice;
+begin
+
+  if LO_DobleEnlace.DobleEnlace_Ultimo(ME_Clientes.Indice) <> -1 then
+  begin
+    LO_DobleEnlace.DobleEnlace_Capturar(ME_Clientes.Indice, LO_DobleEnlace.DobleEnlace_Ultimo(ME_Clientes.Indice), Reg);
+    Showmessage('Pos ultimo: '+IntToStr(LO_DobleEnlace.DobleEnlace_Ultimo(ME_Clientes.Indice))+', clave: '+Reg.Clave);
+  end
+
+end;
+
+procedure TForm_Clientes.ComboBox1Change(Sender: TObject);
+begin
+  if (Form_Clientes.ComboBox1.ItemIndex = 0) then
+    begin
+      ListarClientes;
+      Form_Clientes.Label6.Visible:= false;
+      Form_Clientes.Label7.Visible:= false;
+      Form_Clientes.DateTimePicker1.Visible:= false;
+      Form_Clientes.DateTimePicker2.Visible:= false;
+
+      Form_Clientes.Label8.Visible:= false;
+      Form_Clientes.Edit4.Visible:= false;
+    end
+    else
+    if (Form_Clientes.ComboBox1.ItemIndex = 1) then
+    begin
+      Form_Clientes.Label6.Visible:= true;
+      Form_Clientes.Label7.Visible:= true;
+      Form_Clientes.DateTimePicker1.Visible:= true;
+      Form_Clientes.DateTimePicker2.Visible:= true;
+
+      Form_Clientes.Label8.Visible:= false;
+      Form_Clientes.Edit4.Visible:= false;
+    end
+    else
+    if (Form_Clientes.ComboBox1.ItemIndex = 2) then
+    begin
+      Form_Clientes.Label6.Visible:= false;
+      Form_Clientes.Label7.Visible:= false;
+      Form_Clientes.DateTimePicker1.Visible:= false;
+      Form_Clientes.DateTimePicker2.Visible:= false;
+
+      Form_Clientes.Label8.Visible:= true;
+      Form_Clientes.Edit4.Visible:= true;
+    end;
+end;
+
+procedure ListarPorFechas( Fecha1, Fecha2: TDateTime);
+var
+  posicion, posDatos: longint;
+
+  RegistroPila: LO_DobleEnlace.Tipo_Registro_Indice;
+  RegistroIndice: LO_DobleEnlace.Tipo_Registro_Indice;
+  RegistroDatosAsiento: LO_Datos_Asientos.Tipo_Registro_Datos;
+  RegistroDatosCliente: LO_Datos_Clientes.Tipo_Registro_Datos;
+  pilaAux: LO_DobleEnlace.Tipo_Indice;
+  bCorte: boolean;
+  i: longint;
+begin
+  //Por cada uno de los clientes recorremos la pila
+  //Si encontramos una fecha asociada a él entre las dos fechas pasadas por parametro
+  //Lo escribimos en la grilla
+  LimpiarTablaClientes;
+  Form_Clientes.StringGrid1.RowCount:= 1;
+
+  posicion := LO_DobleEnlace.DobleEnlace_Primero(Unit1.ME_Clientes.Indice);
+
+  i:=1;
+
+  LO_Pila.Pila_Crear(pilaAux, Unit1.sRuta, 'pilaTemp');
+  LO_Pila.Pila_Abrir(pilaAux);
+
+  while (posicion <> LO_DobleEnlace.DobleEnlace_PosNula(Unit1.ME_Clientes.Indice)) do
+  begin
+    LO_DobleEnlace.DobleEnlace_Capturar(Unit1.ME_Clientes.Indice,posicion, RegistroIndice);
+    bCorte:=false;
+
+    while (LO_Pila.Pila_Vacia(Unit1.ME_CuentasCorrientes.Pila) = false) and (bCorte = false) do
+    begin
+      Pila_Tope(Unit1.ME_CuentasCorrientes.Pila, RegistroPila);
+
+      if ( (RegistroPila.Clave) = (RegistroIndice.Clave) ) then
+      begin
+
+        posDatos:= RegistroPila.Posicion;
+        LO_Datos_Asientos.Datos_Capturar(Unit1.ME_CuentasCorrientes.Datos, posDatos, RegistroDatosAsiento);
+
+        if (StrToDate(RegistroDatosAsiento.fecha) >= fecha1) and (StrToDate(RegistroDatosAsiento.fecha) <= fecha2) then
+        begin
+          bCorte:= true;
+          posDatos:= RegistroIndice.Posicion;
+
+          LO_Datos_Clientes.Datos_Capturar(Unit1.ME_Clientes.Datos, posdatos, RegistroDatosCliente);
+          Form_Clientes.StringGrid1.RowCount:=  Form_Clientes.StringGrid1.RowCount + 1;
+          
+          
+          Form_Clientes.StringGrid1.Cells[0,i]:= RegistroDatosCliente.Clave;
+          Form_Clientes.StringGrid1.Cells[1,i]:= RegistroDatosCliente.Nombre;
+          Form_Clientes.StringGrid1.Cells[2,i]:= RegistroDatosCliente.Dni;
+
+          i:=i+1;
+        end
+        else
+        begin
+          Pila_Apilar(pilaAux, RegistroPila);
+          Pila_Desapilar(Unit1.ME_CuentasCorrientes.Pila);
+        end
+
+      end
+      else
+      begin
+        Pila_Apilar(pilaAux, RegistroPila);
+        Pila_Desapilar(Unit1.ME_CuentasCorrientes.Pila);
+      end
+
+    end;//While
+
+    //Volver a dejar pila como estaba:
+    While ( Pila_Vacia(pilaAux) = false) do
+    begin
+      Pila_Tope(pilaAux, RegistroPila);
+      Pila_Apilar(Unit1.ME_CuentasCorrientes.Pila, registroPila);
+      Pila_Desapilar(pilaAux);
+    end ;
+
+
+    posicion:= RegistroIndice.Sig;
+  end;//while
+
+  LO_Pila.Pila_Destruir(pilaAux);
+end;
+
+
+
+
+procedure TForm_Clientes.DateTimePicker1Change(Sender: TObject);
+begin
+   if Form_Clientes.DateTimePicker1.Date < Form_Clientes.DateTimePicker2.Date then
+  begin
+    ListarPorFechas( Form_Clientes.DateTimePicker1.Date, Form_Clientes.DateTimePicker2.Date );
+  end
+end;
+
+procedure TForm_Clientes.DateTimePicker2Change(Sender: TObject);
+begin
+ if Form_Clientes.DateTimePicker1.Date < Form_Clientes.DateTimePicker2.Date then
+  begin
+    ListarPorFechas( Form_Clientes.DateTimePicker1.Date, Form_Clientes.DateTimePicker2.Date );
+  end
+end;
+
+procedure ListarClientesPorArticulo(codArticulo: longint);
+var
+  pos, posDatos, nroComprobante, i: longint;
+  PilaAuxCC, PilaAuxDetalles: LO_DobleEnlace.Tipo_Indice;
+  RegistroIndice, RegistroPilaCC, RegistroPilaDetalle: LO_DobleEnlace.Tipo_Registro_Indice;
+  RegistroDatosAsiento: LO_Datos_Asientos.Tipo_Registro_Datos;
+  RegistroDatosDetalle: LO_Datos_Detalles.Tipo_Registro_Datos;
+  RegistroDatosCliente: LO_Datos_Clientes.Tipo_Registro_Datos;
+  bCorte: boolean;
+begin
+  pos:= LO_DobleEnlace.DobleEnlace_Primero(Unit1.ME_Clientes.Indice);
+  Pila_Crear(PilaAuxCC, Unit1.sRuta, 'pilaTempCC');
+  Pila_Abrir(PilaAuxCC);
+  Pila_Crear(PilaAuxDetalles, unit1.sRuta, 'pilaTempDetalles');
+  Pila_Abrir(PilaAuxDetalles);
+
+  LimpiarTablaClientes;
+  Form_Clientes.StringGrid1.RowCount:= 1;
+  i:=1;
+
+  while pos <> LO_DobleEnlace.DobleEnlace_PosNula(Unit1.ME_Clientes.Indice) do
+  begin
+    DobleEnlace_Capturar(Unit1.ME_Clientes.Indice, pos, RegistroIndice);
+    bCorte:= false;
+
+    while (Pila_Vacia(Unit1.ME_CuentasCorrientes.Pila) = false) and (bCorte = false) do
+    begin
+      Pila_Tope(Unit1.ME_CuentasCorrientes.Pila, RegistroPilaCC);
+
+      if (RegistroPilaCC.Clave = RegistroIndice.Clave) then
+      begin
+        posDatos:= RegistroPilaCC.posicion;
+        LO_Datos_Asientos.Datos_Capturar(Unit1.ME_CuentasCorrientes.Datos, posDatos, RegistroDatosAsiento);
+        nroComprobante:= RegistroDatosAsiento.nroComprobante;
+
+        while (Pila_Vacia(Unit1.ME_Ventas.Detalle.Pila) = false) and (bCorte = false) do
+        begin
+          Pila_Tope(Unit1.ME_Ventas.Detalle.Pila, RegistroPilaDetalle);
+
+          if ( StrToINt(RegistroPilaDetalle.Clave) = nroComprobante) then
+          begin
+            posDatos:= RegistroPilaDetalle.Posicion;
+            LO_Datos_Detalles.Datos_Capturar(Unit1.ME_Ventas.Detalle.Datos, posDatos, RegistroDatosDetalle);
+
+            if RegistroDatosDetalle.codArticulo = codArticulo then
+            begin
+              bCorte:= true;
+              posDatos:= RegistroIndice.Posicion;
+
+              //Agregamos el cliente a la tabla
+              LO_Datos_Clientes.Datos_Capturar(Unit1.ME_Clientes.Datos, posdatos, RegistroDatosCliente);
+              Form_Clientes.StringGrid1.RowCount:=  Form_Clientes.StringGrid1.RowCount + 1;
+              Form_Clientes.StringGrid1.Cells[0,i]:= RegistroDatosCliente.Clave;
+              Form_Clientes.StringGrid1.Cells[1,i]:= RegistroDatosCliente.Nombre;
+              Form_Clientes.StringGrid1.Cells[2,i]:= RegistroDatosCliente.Dni;
+
+              i:= i +1;
+
+            end
+            else
+            begin
+              Pila_Desapilar(Unit1.ME_Ventas.Detalle.Pila);
+              Pila_Apilar(PilaAuxDetalles, RegistroPilaDetalle);
+            end
+          end
+          else
+          begin
+            Pila_Desapilar(Unit1.ME_Ventas.Detalle.Pila);
+            Pila_Apilar(PilaAuxDetalles, RegistroPilaDetalle);
+          end;
+
+        end;//While pila detalles
+      end;
+
+
+      //Volvemos a dejar como estaba la pila de detalles
+        while Pila_Vacia(pilaAuxDetalles) = false do
+        begin
+          Pila_Tope(pilaAuxDetalles, RegistroPilaDetalle);
+          Pila_Apilar(Unit1.ME_Ventas.Detalle.Pila, RegistroPilaDetalle);
+          Pila_Desapilar(pilaAuxDetalles);
+        end;
+
+      
+        Pila_Desapilar(Unit1.ME_CuentasCorrientes.Pila);
+        Pila_Apilar(pilaAuxCC, RegistroPilaCC);
+    end;//while pila cc
+
+    //Volvemos a dejar la pila de CC como estaba
+
+    while Pila_Vacia(PilaAuxCC) = false do
+    begin
+      Pila_Tope(PilaAuxCC, RegistroPilaCC);
+      Pila_Apilar(Unit1.ME_CuentasCorrientes.Pila, RegistroPilaCC);
+      Pila_Desapilar(PilaAuxCC);
+    end;
+
+
+    pos:= RegistroIndice.Sig;
+  end; //while recorrer listadoble
+
+  if bCorte=false then showmessage('No se encontraron compras de este articulo');
+
+  Pila_Destruir(pilaAuxCC);
+  Pila_Destruir(pilaAuxDetalles);
+end;
+
+procedure TForm_Clientes.Edit4Change(Sender: TObject);
+var
+  s: String;
+  n: longint;
+begin
+  s:= Form_Clientes.Edit4.Text;
+
+  if ( Length(s) = 4 ) and ( TryStrToInt(s, n) ) then
+  begin
+    ListarClientesPorArticulo( n );
+  end
+
+
+end;
+
+end.
